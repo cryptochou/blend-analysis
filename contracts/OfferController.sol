@@ -27,11 +27,14 @@ abstract contract OfferController is IOfferController, Signatures, Ownable2StepU
         uint256 expirationTime,
         uint256 salt
     ) internal view {
+        // 校验签名
         _verifyOfferAuthorization(offerHash, signer, oracle, signature);
 
+        // 校验过期时间
         if (expirationTime < block.timestamp) {
             revert OfferExpired();
         }
+        // 校验是否已经取消
         if (cancelledOrFulfilled[signer][salt] == 1) {
             revert OfferUnavailable();
         }

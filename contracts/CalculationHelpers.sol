@@ -10,8 +10,8 @@ library CalculationHelpers {
     uint256 private constant _MIN_LOAN_TIME = 7200; // 2 hours
 
     /**
-     * @dev Computes the current debt of a borrow given the last time it was touched and the last computed debt.
-     * @param amount Principal in ETH
+     * @dev Computes the current debt of a borrow given the last time it was touched and the last computed debt. 计算借款的当前债务，给定上次触及借款的时间和上次计算的债务。
+     * @param amount Principal in ETH 
      * @param startTime Start time of the loan
      * @param rate Interest rate (in bips)
      * @dev Formula: https://www.desmos.com/calculator/l6omp0rwnh
@@ -21,11 +21,15 @@ library CalculationHelpers {
         uint256 rate,
         uint256 startTime
     ) external view returns (uint256) {
+        // 计算借款时间
         uint256 loanTime = block.timestamp - startTime;
+        // 如果借款时间小于最小借款时间，则借款时间为最小借款时间
         if (loanTime < _MIN_LOAN_TIME) {
             loanTime = _MIN_LOAN_TIME;
         }
+        // 计算借款年数
         int256 yearsWad = wadDiv(int256(loanTime) * 1e18, _YEAR_WAD);
+        // 计算借款利息
         return uint256(wadMul(int256(amount), wadExp(wadMul(yearsWad, bipsToSignedWads(rate)))));
     }
 
