@@ -482,7 +482,8 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     address private constant _DELEGATE = 0x00000000000111AbE46ff893f3B2fdF1F759a8A8; // blur ExecutionDelegate
 
     /**
-     * @notice Purchase an NFT and use as collateral for a loan 购买 NFT 并用作贷款的抵押品
+     * @notice Purchase an NFT and use as collateral for a loan 
+     * 购买 NFT 并用作贷款的抵押品
      * @param offer Loan offer to take
      * @param signature Lender offer signature
      * @param loanAmount Loan amount in ETH
@@ -579,7 +580,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Purchase a locked NFT; repay the initial loan; lock the token as collateral for a new loan 购买锁定的 NFT；偿还初始贷款；将 NFT 锁定为新贷款的抵押品, 与 buyToBorrow 函数的区别是，buyToBorrowLocked 函数是用于购买锁定的 NFT，而 buyToBorrow 函数是用于购买非锁定的 NFT
+     * @notice Purchase a locked NFT; repay the initial loan; lock the token as collateral for a new loan 购买锁定的 NFT；偿还初始贷款；将 NFT 锁定为新贷款的抵押品
      * @param lien Lien preimage struct
      * @param sellInput Sell offer and signature
      * @param loanInput Loan offer and signature
