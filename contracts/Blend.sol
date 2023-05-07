@@ -17,10 +17,10 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     uint256 private constant _BASIS_POINTS = 10_000; // 手续费点数
     uint256 private constant _MAX_AUCTION_DURATION = 432_000; // 最大拍卖持续时间 5 天
     IBlurPool private immutable pool; // blur ETH pool
-    uint256 private _nextLienId; // 下一个抵押品id
+    uint256 private _nextLienId; // lienid index
 
-    mapping(uint256 => bytes32) public liens; // 抵押品id => 抵押品哈希(存储抵押品信息)
-    mapping(bytes32 => uint256) public amountTaken; // 抵押品哈希 => 已取款金额（存储抵押品已经接受的贷款金额）
+    mapping(uint256 => bytes32) public liens; // lien id => lien哈希(存储lien信息)
+    mapping(bytes32 => uint256) public amountTaken; // lien哈希 => 已取款金额（存储lien已经接受的贷款金额）
 
     // required by the OZ UUPS module
     function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -45,8 +45,8 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
      * @param offer Loan offer 贷款提议
      * @param signature Lender offer signature
      * @param loanAmount Loan amount in ETH 贷款金额
-     * @param collateralTokenId Token id to provide as collateral 提供作为抵押品的代币id
-     * @return lienId New lien id 新的抵押品id
+     * @param collateralTokenId Token id to provide as collateral 提供作为lien的代币id
+     * @return lienId New lien id 新的lienid
      */
     function borrow(
         LoanOffer calldata offer,
@@ -56,7 +56,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     ) external returns (uint256 lienId) {
         lienId = _borrow(offer, signature, loanAmount, collateralTokenId);
 
-        /* Lock collateral token. */ // 锁定抵押品代币
+        /* Lock collateral token. */ // 锁定lien代币
         offer.collection.safeTransferFrom(msg.sender, address(this), collateralTokenId);
 
         /* Transfer loan to borrower. */ // 将贷款转移到借款人
@@ -72,7 +72,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         Lien calldata lien,
         uint256 lienId
     ) external validateLien(lien, lienId) lienIsActive(lien) {
-        // 计算当前的债务偿还并删除抵押品数据
+        // 计算当前的债务偿还并删除lien数据
         uint256 debt = _repay(lien, lienId);
 
         /* Return NFT to borrower. */ // 将NFT返回给借款人
@@ -83,7 +83,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Verifies and takes loan offer; creates new lien 验证并接受贷款提议；创建新的抵押品
+     * @notice Verifies and takes loan offer; creates new lien 验证并接受贷款提议；创建新的lien
      * @param offer Loan offer
      * @param signature Lender offer signature
      * @param loanAmount Loan amount in ETH
@@ -101,7 +101,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             revert InvalidAuctionDuration();
         }
         
-        // 创建抵押品数据
+        // 创建lien数据
         Lien memory lien = Lien({
             lender: offer.lender,
             borrower: msg.sender,
@@ -114,7 +114,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             auctionDuration: offer.auctionDuration
         });
 
-        /* Create lien. */ // 存储 抵押品id => 抵押品哈希
+        /* Create lien. */ // 存储 lienid => lien哈希
         unchecked {
             liens[lienId = _nextLienId++] = keccak256(abi.encode(lien));
         }
@@ -124,7 +124,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Computes the current debt repayment and burns the lien 计算当前的债务偿还并销毁抵押品
+     * @notice Computes the current debt repayment and burns the lien 计算当前的债务偿还并销毁lien
      * @dev Does not transfer assets
      * @param lien Lien preimage
      * @param lienId Lien id
@@ -134,7 +134,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         // 计算当前的债务
         debt = CalculationHelpers.computeCurrentDebt(lien.amount, lien.rate, lien.startTime);
 
-        // 删除抵押品数据
+        // 删除lien数据
         delete liens[lienId];
 
         // 发出偿还事件
@@ -142,8 +142,8 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Verifies and takes loan offer
-     * @dev Does not transfer loan and collateral assets; does not update lien hash 不转移贷款和抵押资产；不更新抵押品哈希
+     * @notice Verifies and takes loan offer 验证并接受贷款提议
+     * @dev Does not transfer loan and collateral assets; does not update lien hash 不转移贷款和抵押资产；不更新lien哈希
      * @param offer Loan offer
      * @param signature Lender offer signature
      * @param lien Lien preimage
@@ -208,20 +208,23 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
 
     /**
      * @notice Starts Dutch Auction on lien ownership 开始拍卖抵押物所有权
-     * @dev Must be called by lien owner 只能由抵押品所有者调用
+     * @dev Must be called by lien owner 只能由lien出借人调用
      * @param lienId Lien token id
      */
     function startAuction(Lien calldata lien, uint256 lienId) external validateLien(lien, lienId) {
+        // 调用者必须是出借人
         if (msg.sender != lien.lender) {
             revert Unauthorized();
         }
 
-        /* Cannot start if auction has already started. */
+        /* Cannot start if auction has already started. */ 
+        // 如果拍卖已经开始，则无法开始
         if (lien.auctionStartBlock != 0) {
             revert AuctionIsActive();
         }
 
         /* Add auction start block to lien. */
+        // 添加拍卖开始区块时间到lien
         liens[lienId] = keccak256(
             abi.encode(
                 Lien({
@@ -237,12 +240,12 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
                 })
             )
         );
-
+        // 发出开始拍卖事件
         emit StartAuction(lienId, address(lien.collection));
     }
 
     /**
-     * @notice Seizes collateral from defaulted lien, skipping liens that are not defaulted 从违约留置权中收回抵押品，跳过未违约的留置权
+     * @notice Seizes collateral from defaulted lien, skipping liens that are not defaulted 从违约的lien中没收抵押品，跳过未违约的lien
      * @param lienPointers List of lien, lienId pairs
      */
     function seize(LienPointer[] calldata lienPointers) external {
@@ -251,20 +254,25 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             Lien calldata lien = lienPointers[i].lien;
             uint256 lienId = lienPointers[i].lienId;
 
+            // 调用者必须是出借人
             if (msg.sender != lien.lender) {
                 revert Unauthorized();
             }
+            // 验证lien
             if (!_validateLien(lien, lienId)) {
                 revert InvalidLien();
             }
 
             /* Check that the auction has ended and lien is defaulted. */
+            // 检查拍卖是否已经结束并且lien已经违约
             if (_lienIsDefaulted(lien)) {
+                // 删除lien数据
                 delete liens[lienId];
 
                 /* Seize collateral to lender. */
+                // 收回抵押品到出借人
                 lien.collection.safeTransferFrom(address(this), lien.lender, lien.tokenId);
-
+                // 发出没收事件
                 emit Seize(lienId, address(lien.collection));
             }
 
@@ -275,8 +283,8 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Refinances to different loan amount and repays previous loan
-     * @dev Must be called by lender; previous loan must be repaid with interest
+     * @notice Refinances to different loan amount and repays previous loan // 重新融资到不同的贷款金额并偿还以前的贷款
+     * @dev Must be called by lender; previous loan must be repaid with interest // 必须由出借人调用；必须偿还以前的贷款和利息
      * @param lien Lien struct
      * @param lienId Lien id
      * @param offer Loan offer
@@ -288,26 +296,30 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         LoanOffer calldata offer,
         bytes calldata signature
     ) external validateLien(lien, lienId) lienIsActive(lien) {
+        // 调用者必须是出借人
         if (msg.sender != lien.lender) {
             revert Unauthorized();
         }
 
-        /* Interest rate must be at least as good as current. */
+        /* Interest rate must be at least as good as current. */ 
+        // 利率必须至少与当前利率一样好 
+        // 新利率大于之前的利率并且拍卖持续时间必须一样
         if (offer.rate > lien.rate || offer.auctionDuration != lien.auctionDuration) {
             revert InvalidRefinance();
         }
 
+        // 计算当前贷款金额
         uint256 debt = CalculationHelpers.computeCurrentDebt(lien.amount, lien.rate, lien.startTime);
 
         _refinance(lien, lienId, debt, offer, signature);
 
-        /* Repay initial loan. */
+        /* Repay initial loan. */ // 偿还初始贷款
         pool.transferFrom(offer.lender, lien.lender, debt);
     }
 
     /**
-     * @notice Refinance lien in auction at the current debt amount where the interest rate ceiling increases over time
-     * @dev Interest rate must be lower than the interest rate ceiling
+     * @notice Refinance lien in auction at the current debt amount where the interest rate ceiling increases over time // 在拍卖中以当前负债金额重新融资，利率上限随时间增加
+     * @dev Interest rate must be lower than the interest rate ceiling // 利率必须低于利率上限
      * @param lien Lien struct
      * @param lienId Lien token id
      * @param rate Interest rate (in bips)
@@ -319,6 +331,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         uint256 rate
     ) external validateLien(lien, lienId) auctionIsActive(lien) {
         /* Rate must be below current rate limit. */
+        // 利率必须低于当前利率限制
         uint256 rateLimit = CalculationHelpers.calcRefinancingAuctionRate(
             lien.auctionStartBlock,
             lien.auctionDuration,
@@ -327,10 +340,10 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         if (rate > rateLimit) {
             revert RateTooHigh();
         }
-
+        // 计算当前贷款金额
         uint256 debt = CalculationHelpers.computeCurrentDebt(lien.amount, lien.rate, lien.startTime);
 
-        /* Reset the lien with the new lender and interest rate. */
+        /* Reset the lien with the new lender and interest rate. */ // 用新的出借人和利率重置lien
         liens[lienId] = keccak256(
             abi.encode(
                 Lien({
@@ -346,7 +359,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
                 })
             )
         );
-
+        // 发出重新融资事件
         emit Refinance(
             lienId,
             address(lien.collection),
@@ -356,12 +369,12 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             lien.auctionDuration
         );
 
-        /* Repay the initial loan. */
+        /* Repay the initial loan. */ // 偿还初始贷款
         pool.transferFrom(msg.sender, lien.lender, debt);
     }
 
     /**
-     * @notice Refinances to different loan amount and repays previous loan
+     * @notice Refinances to different loan amount and repays previous loan // 重新融资到不同的贷款金额并偿还以前的贷款
      * @param lien Lien struct
      * @param lienId Lien id
      * @param offer Loan offer
@@ -373,27 +386,30 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         LoanOffer calldata offer,
         bytes calldata signature
     ) external validateLien(lien, lienId) auctionIsActive(lien) {
-        /* Rate must be below current rate limit and auction duration must be the same. */
+        
         uint256 rateLimit = CalculationHelpers.calcRefinancingAuctionRate(
             lien.auctionStartBlock,
             lien.auctionDuration,
             lien.rate
         );
+        /* Rate must be below current rate limit and auction duration must be the same. */
+        // 利率必须低于当前利率限制，拍卖持续时间必须相同
         if (offer.rate > rateLimit || offer.auctionDuration != lien.auctionDuration) {
             revert InvalidRefinance();
         }
-
+        // 计算当前贷款金额
         uint256 debt = CalculationHelpers.computeCurrentDebt(lien.amount, lien.rate, lien.startTime);
 
+        // 重新贷款
         _refinance(lien, lienId, debt, offer, signature);
 
-        /* Repay initial loan. */
+        /* Repay initial loan. */ // 偿还初始贷款
         pool.transferFrom(offer.lender, lien.lender, debt);
     }
 
     /**
-     * @notice Refinances to different loan amount and repays previous loan
-     * @dev Must be called by borrower; previous loan must be repaid with interest
+     * @notice Refinances to different loan amount and repays previous loan // 重新融资到不同的贷款金额并偿还以前的贷款
+     * @dev Must be called by borrower; previous loan must be repaid with interest // 必须由借款人调用；必须用利息偿还以前的贷款
      * @param lien Lien struct
      * @param lienId Lien id
      * @param loanAmount New loan amount
@@ -407,25 +423,28 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         LoanOffer calldata offer,
         bytes calldata signature
     ) external validateLien(lien, lienId) lienIsActive(lien) {
+        // 必须由借款人调用
         if (msg.sender != lien.borrower) {
             revert Unauthorized();
         }
+        // 必须在最大拍卖持续时间内
         if (offer.auctionDuration > _MAX_AUCTION_DURATION) {
             revert InvalidAuctionDuration();
         }
 
+        // 重新贷款
         _refinance(lien, lienId, loanAmount, offer, signature);
-
+        // 计算当前贷款金额
         uint256 debt = CalculationHelpers.computeCurrentDebt(lien.amount, lien.rate, lien.startTime);
 
         if (loanAmount >= debt) {
-            /* If new loan is more than the previous, repay the initial loan and send the remaining to the borrower. */
+            /* If new loan is more than the previous, repay the initial loan and send the remaining to the borrower. */ // 如果新贷款超过以前的贷款，则偿还初始贷款并将剩余的发送给借款人
             pool.transferFrom(offer.lender, lien.lender, debt);
             unchecked {
                 pool.transferFrom(offer.lender, lien.borrower, loanAmount - debt);
             }
         } else {
-            /* If new loan is less than the previous, borrower must supply the difference to repay the initial loan. */
+            /* If new loan is less than the previous, borrower must supply the difference to repay the initial loan. */ // 如果新贷款小于以前的贷款，则借款人必须提供差额以偿还初始贷款
             pool.transferFrom(offer.lender, lien.lender, loanAmount);
             unchecked {
                 pool.transferFrom(lien.borrower, lien.lender, debt - loanAmount);
@@ -433,6 +452,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         }
     }
 
+    // 重新贷款
     function _refinance(
         Lien calldata lien,
         uint256 lienId,
@@ -444,23 +464,25 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             revert CollectionsDoNotMatch();
         }
 
-        /* Update lien with new loan details. */
+        /* Update lien with new loan details. */ // 使用新的贷款详情更新 lien
         Lien memory newLien = Lien({
-            lender: offer.lender, // set new lender
+            lender: offer.lender, // set new lender // 设置新的贷款人
             borrower: lien.borrower,
             collection: lien.collection,
             tokenId: lien.tokenId,
             amount: loanAmount,
             startTime: block.timestamp,
             rate: offer.rate,
-            auctionStartBlock: 0, // close the auction
+            auctionStartBlock: 0, // close the auction // 关闭拍卖
             auctionDuration: offer.auctionDuration
         });
+        // 更新 lien
         liens[lienId] = keccak256(abi.encode(newLien));
 
-        /* Take the loan offer. */
+        /* Take the loan offer. */ // 接受贷款
         _takeLoanOffer(offer, signature, newLien, lienId);
-
+        
+        // 发送重新贷款事件
         emit Refinance(
             lienId,
             address(offer.collection),
@@ -508,7 +530,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         uint256 collateralTokenId = execution.makerOrder.order.tokenId;
         uint256 price = execution.makerOrder.order.price;
 
-        /* Create lien. */ // 创建抵押品
+        /* Create lien. */ // 创建lien
         Lien memory lien = Lien({
             lender: offer.lender,
             borrower: msg.sender,
@@ -521,7 +543,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             auctionDuration: offer.auctionDuration
         });
         unchecked {
-            // 存储抵押品id
+            // 存储lienid
             liens[lienId = _nextLienId++] = keccak256(abi.encode(lien));
         }
 
@@ -580,10 +602,10 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Purchase a locked NFT; repay the initial loan; lock the token as collateral for a new loan 购买锁定的 NFT；偿还初始贷款；将 NFT 锁定为新贷款的抵押品
+     * @notice Purchase a locked NFT; repay the initial loan; lock the token as collateral for a new loan 购买锁定的 NFT；偿还初始贷款；将 NFT 锁定为新lien的抵押物
      * @param lien Lien preimage struct
-     * @param sellInput Sell offer and signature
-     * @param loanInput Loan offer and signature
+     * @param sellInput Sell offer and signature 销售订单和签名
+     * @param loanInput Loan offer and signature 贷款订单和签名
      * @return lienId Lien id
      */
     function buyToBorrowLocked(
@@ -610,7 +632,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             sellInput.signature
         );
 
-        // 验证并接受贷款提议；创建新的抵押品
+        // 验证并接受贷款提议；创建新的lien
         lienId = _borrow(loanInput.offer, loanInput.signature, loanAmount, lien.tokenId);
 
         /* Transfer funds. */ // 转移资金
@@ -631,20 +653,24 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
                 pool.transferFrom(msg.sender, sellInput.offer.borrower, priceAfterFees - debt);
             }
         } else if (loanAmount < priceAfterFees) {
-            /* debt < loanAmount < priceAfterFees */
+            /* debt < loanAmount < priceAfterFees */ 
+            // 如果贷款金额大于需要偿还的贷款，但小于从销售中获得的资金
 
-            /* Repay loan with funds from new lender to old lender. */
+            /* Repay loan with funds from new lender to old lender. */ 
+            // 用新贷款人的资金偿还旧贷款人的贷款
             pool.transferFrom(loanInput.offer.lender, lien.lender, debt);
 
             unchecked {
-                /* Send rest of loan from new lender to old borrower. */
+                /* Send rest of loan from new lender to old borrower. */ 
+                // 将剩余的贷款从新贷款人发送给旧借款人
                 pool.transferFrom(
                     loanInput.offer.lender,
                     sellInput.offer.borrower,
                     loanAmount - debt
                 );
 
-                /* Send rest of sell funds from new borrower to old borrower. */
+                /* Send rest of sell funds from new borrower to old borrower. */ 
+                // 将剩余的销售资金从新借款人发送给旧借款人
                 pool.transferFrom(
                     msg.sender,
                     sellInput.offer.borrower,
@@ -652,20 +678,24 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
                 );
             }
         } else {
-            /* debt < priceAfterFees < loanAmount */
+            /* debt < priceAfterFees < loanAmount */ 
+            // 如果贷款金额大于从销售中获得的资金
 
-            /* Repay loan with funds from new lender to old lender. */
+            /* Repay loan with funds from new lender to old lender. */ 
+            // 用新贷款人的资金偿还旧贷款人的贷款
             pool.transferFrom(loanInput.offer.lender, lien.lender, debt);
 
             unchecked {
-                /* Send rest of sell funds from new lender to old borrower. */
+                /* Send rest of sell funds from new lender to old borrower. */ 
+                // 将剩余的销售资金从新贷款人发送给旧借款人
                 pool.transferFrom(
                     loanInput.offer.lender,
                     sellInput.offer.borrower,
                     priceAfterFees - debt
                 );
 
-                /* Send rest of loan from new lender to new borrower. */
+                /* Send rest of loan from new lender to new borrower. */ 
+                // 将剩余的贷款从新贷款人发送给新借款人
                 pool.transferFrom(loanInput.offer.lender, msg.sender, loanAmount - priceAfterFees);
             }
         }
@@ -701,8 +731,8 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Takes a bid on a locked NFT and use the funds to repay the lien
-     * @dev Must be called by the borrower
+     * @notice Takes a bid on a locked NFT and use the funds to repay the lien // 接受锁定 NFT 的出价，并使用资金偿还贷款
+     * @dev Must be called by the borrower // 必须由借款人调用
      * @param lien Lien preimage
      * @param lienId Lien id
      * @param execution Marketplace execution data
@@ -712,14 +742,17 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         uint256 lienId,
         Execution calldata execution
     ) external validateLien(lien, lienId) lienIsActive(lien) {
+        // bid 订单的创建者不能是 blend 合约，且 msg.sender 必须是借款人
         if (execution.makerOrder.order.trader == address(this) || msg.sender != lien.borrower) {
             revert Unauthorized();
         }
 
-        /* Repay loan with funds received from the sale. */
+        /* Repay loan with funds received from the sale. */ 
+        // 用从销售中获得的资金偿还贷款
         uint256 debt = _repay(lien, lienId);
 
-        /* Create sell side order from Blend. */
+        /* Create sell side order from Blend. */ 
+        // 从 Blend 创建卖单
         Order memory sellOrder = Order({
             trader: address(this),
             side: Side.Sell,
@@ -732,7 +765,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             listingTime: execution.makerOrder.order.listingTime + 1, // listingTime determines maker/taker
             expirationTime: type(uint256).max,
             fees: new Fee[](0),
-            salt: lienId, // prevent reused order hash
+            salt: lienId, // prevent reused order hash 
             extraParams: "\x01" // require oracle signature
         });
         Input memory sell = Input({
@@ -745,28 +778,29 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
             blockNumber: execution.blockNumber
         });
 
-        /* Execute marketplace order. */
+        /* Execute marketplace order. */ // 执行市场订单
         uint256 balanceBefore = pool.balanceOf(address(this));
         lien.collection.approve(_DELEGATE, lien.tokenId);
         _EXCHANGE.execute(sell, execution.makerOrder);
 
-        /* Determine the funds received from the sale (after fees). */
+        /* Determine the funds received from the sale (after fees). */ 
+        // 确定从销售中获得的资金（扣除手续费后）
         uint256 amountReceivedFromSale = pool.balanceOf(address(this)) - balanceBefore;
         if (amountReceivedFromSale < debt) {
             revert InvalidRepayment();
         }
 
-        /* Repay lender. */
+        /* Repay lender. */ // 偿还贷款
         pool.transferFrom(address(this), lien.lender, debt);
 
-        /* Send surplus to borrower. */
+        /* Send surplus to borrower. */ // 将剩余资金发送给借款人
         unchecked {
             pool.transferFrom(address(this), lien.borrower, amountReceivedFromSale - debt);
         }
     }
 
     /**
-     * @notice Verify and take sell offer for token locked in lien; use the funds to repay the debt on the lien // 验证并接受锁定在抵押物中的代币的出售请求； 使用这些资金偿还留置权上的债务
+     * @notice Verify and take sell offer for token locked in lien; use the funds to repay the debt on the lien // 验证并接受锁定在lien中的代币的出售请求； 使用这些资金偿还lien上的债务
      * @dev Does not transfer assets
      * @param lien Lien preimage
      * @param offer Loan offer
@@ -778,7 +812,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         SellOffer calldata offer,
         bytes calldata signature
     ) internal returns (uint256 priceAfterFees, uint256 debt) {
-        // 抵押品的借款人必须是卖单的借款人
+        // lien的借款人必须是卖单的借款人
         if (lien.borrower != offer.borrower) {
             revert Unauthorized();
         }
@@ -948,15 +982,17 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         return liens[lienId] == keccak256(abi.encode(lien));
     }
 
+    // 判断lien是否已经违约
     function _lienIsDefaulted(Lien calldata lien) internal view returns (bool) {
         return
-            lien.auctionStartBlock != 0 &&
-            lien.auctionStartBlock + lien.auctionDuration < block.number;
+            lien.auctionStartBlock != 0 && // 拍卖已经开始
+            lien.auctionStartBlock + lien.auctionDuration < block.number; // 拍卖已经结束
     }
 
+    // 判断拍卖是否已经开始
     function _auctionIsActive(Lien calldata lien) internal view returns (bool) {
         return
-            lien.auctionStartBlock != 0 &&
-            lien.auctionStartBlock + lien.auctionDuration >= block.number;
+            lien.auctionStartBlock != 0 && // 拍卖已经开始
+            lien.auctionStartBlock + lien.auctionDuration >= block.number; // 拍卖还未结束
     }
 }

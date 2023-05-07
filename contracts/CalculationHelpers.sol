@@ -35,7 +35,7 @@ library CalculationHelpers {
 
     /**
      * @dev Calculates the current maximum interest rate a specific refinancing
-     * auction could settle at currently given the auction's start block and duration.
+     * auction could settle at currently given the auction's start block and duration. 计算当前特定的再融资拍卖可以结算的最高利率，给定拍卖的开始区块和持续时间。
      * @param startBlock The block the auction started at
      * @param oldRate Previous interest rate (in bips)
      * @dev Formula: https://www.desmos.com/calculator/urasr71dhb
