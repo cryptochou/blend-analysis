@@ -602,7 +602,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
     }
 
     /**
-     * @notice Purchase a locked NFT; repay the initial loan; lock the token as collateral for a new loan 购买锁定的 NFT；偿还初始贷款；将 NFT 锁定为新lien的抵押物
+     * @notice Purchase a locked NFT; repay the initial loan; lock the token as collateral for a new loan 购买锁定的 NFT；偿还初始贷款；将 NFT 锁定为新 lien 的抵押物
      * @param lien Lien preimage struct
      * @param sellInput Sell offer and signature 销售订单和签名
      * @param loanInput Loan offer and signature 贷款订单和签名

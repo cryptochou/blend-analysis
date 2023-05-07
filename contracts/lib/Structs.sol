@@ -9,7 +9,7 @@ struct LienPointer {
     uint256 lienId;
 }
 
-// 交易出价
+// 交易出价，由借款人创建
 struct SellOffer {
     address borrower; // 借款人
     uint256 lienId; // 抵押品id
@@ -33,7 +33,7 @@ struct Lien {
     uint256 auctionDuration; // 拍卖持续时间
 }
 
-// 贷款出价
+// 贷款出价，由拥有资金的出借人创建
 struct LoanOffer {
     address lender; // 出借人
     ERC721 collection; // ERC721合约地址
