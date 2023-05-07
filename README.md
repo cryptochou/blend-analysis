@@ -53,14 +53,28 @@ refinanceAuctionByOther
 
 买家
 
-buyToBorrow
+buyToBorrow 0x8593d5fc
+buyToBorrowETH 0x3ed7d74d
 购买 NFT 并与正在拍卖的贷款出价撮合，生成新的借款
 使用场景是：当前有一个 loanoffer，但是没有 NFT 与之撮合，买家从交易所中购买 NFT 并与之撮合，生成新的借款，买家成为借款人并获得资金。
 
-buyToBorrowLocked
+https://etherscan.io/address/0x29469395eaf6f95920e59f858042f0e28d98a20b?method=0x8593d5fc
+https://etherscan.io/address/0x29469395eaf6f95920e59f858042f0e28d98a20b?method=0x3ed7d74d
+
+https://dashboard.tenderly.co/tx/mainnet/0x6b08a227ce9042fb36ae12e0c0fd81ded630c86dcc33851219f529bacce6f311/logs
+
+buyToBorrowLocked 0x2e2fb18b
+buyToBorrowLockedETH 0xb2a0bb86
 购买被抵押的 NFT，还清贷款，然后与指定的贷款出价撮合，生成新的借款
 使用场景是：当前有一个 selloffer，和一个 loanoffer。买家接受 selloffer，购买 NFT，替之前的借款人还清贷款，接着与 loanoffer 撮合，生成新的借款，买家成为借款人获得资金。
 
-buyLocked
+https://etherscan.io/address/0x29469395eaf6f95920e59f858042f0e28d98a20b?method=0x2e2fb18b
+https://etherscan.io/address/0x29469395eaf6f95920e59f858042f0e28d98a20b?method=0xb2a0bb86
+
+buyLocked 0xe7efc178
+buyLockedETH 0x8553b234
 购买被抵押的 NFT，替借款人还清贷款
 使用场景是：当前有一个 selloffer，买家接受 selloffer，购买 NFT。然后替借款人还清贷款。
+
+https://etherscan.io/address/0x29469395eaf6f95920e59f858042f0e28d98a20b?method=0xe7efc178
+https://etherscan.io/address/0x29469395eaf6f95920e59f858042f0e28d98a20b?method=0x8553b234
