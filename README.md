@@ -1,5 +1,17 @@
 # blend-analysis
 
+几天前 Blur 推出了 Blend：NFT 的点对点永久借贷协议（the Peer-to-Peer Perpetual Lending Protocol for NFTs）。该协议是 Blur 与 [@Paradigm](https://twitter.com/paradigm) 的 [@danrobinson](https://twitter.com/danrobinson) 和 [@transmissions11](https://twitter.com/transmissions11) 合作的产物。 danrobinson 是 Uniswap V3 的发明者之一。transmissions11 则是 Paradigm 的研究员，也是 Seaport 的主要贡献者。
+
+这个链接是白皮书的地址。
+https://www.paradigm.xyz/2023/05/blend
+
+Blend 有以下几个特点：
+
+1. No Oracles（无需预言机）：利率和贷款价值比率由贷款人决定，让市场来调节。
+2. No Expiries（无到期日）：生成的借贷没有到期时间，只要有贷款人愿意用抵押品贷款，贷款就一直有效。只有在利率变化或其中一方想退出头寸时，才需要进行链上交易。
+3. Liquidatable（可清算性）：只要贷款人触发了再融资拍卖，如果没有人愿意以任何利率接手债务，NFT就可能被清算。
+4. Peer-To-Peer（点对点）：Blend 采用点对点的模式，每笔贷款都是单独匹配的。
+
 
 
 ![](classDiagram.svg)
