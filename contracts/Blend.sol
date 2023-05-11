@@ -224,7 +224,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
         }
 
         /* Add auction start block to lien. */
-        // 添加拍卖开始区块时间到lien
+        // 添加拍卖开始区块时间到 lien
         liens[lienId] = keccak256(
             abi.encode(
                 Lien({
@@ -804,7 +804,7 @@ contract Blend is IBlend, OfferController, UUPSUpgradeable {
      * @dev Does not transfer assets
      * @param lien Lien preimage
      * @param offer Loan offer
-     * @param signature Loan offer signature
+     * @param signature Loan offer signature 这个地方错了，应该是 sell offer signature
      * @return priceAfterFees Price of the token (after fees), debt Current debt amount // priceAfterFees 是代币的价格（扣除费用后），debt 是当前债务金额
      */
     function _buyLocked(
